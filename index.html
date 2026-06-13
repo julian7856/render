@@ -2,38 +2,31 @@
 <html lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { margin: 0; font-family: sans-serif; background: #2f3136; color: white; height: 100vh; display: flex; }
-        
-        /* PC Layout (Default) */
         #sidebar { width: 250px; background: #202225; padding: 20px; border-right: 1px solid #000; }
         #chat-container { flex: 1; display: flex; flex-direction: column; }
-        
-        /* Mobile Layout (Overrides) */
-        @media (max-width: 600px) {
-            #sidebar { display: none; } /* Hide sidebar on mobile */
-        }
-
-        #messages { flex: 1; padding: 20px; overflow-y: auto; }
+        @media (max-width: 600px) { #sidebar { display: none; } }
         .msg { background: #40444b; padding: 10px; margin-bottom: 5px; border-radius: 5px; }
-        input { padding: 10px; border: none; border-radius: 4px; }
+        input { padding: 10px; border: none; border-radius: 4px; width: 90%; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
     <div id="login-screen" style="margin: auto; text-align: center;">
-        <h2>Pilot Platform</h2>
+        <h2>Pilot Platform Login</h2>
+        <div id="g_id_onload" data-client_id="205585516210-sk72oka4jppvr4micfes5m9dkvd27f1o.apps.googleusercontent.com" data-callback="handleLogin"></div>
+        <div class="g_id_signin"></div>
         <input type="number" id="age" placeholder="Enter Age">
-        <button onclick="startApp()">Login</button>
     </div>
 
     <div id="chat-screen" style="display:none; width: 100%;">
         <div id="sidebar">
             <h3>Settings</h3>
-            <label>Display Name</label><br>
             <input type="text" id="newName" placeholder="New Name">
-            <button onclick="updateName()">Save</button>
+            <button onclick="updateName()">Save Name</button>
         </div>
         <div id="chat-container">
             <div id="messages"></div>
@@ -48,18 +41,26 @@
         const supabase = supabase.createClient('https://qgrfomaigbfbeetafexl.supabase.co', 'sb_publishable_x7lqzAgNEH2YSohhpru3RQ_0TzyUwue');
         let socket, currentName = "Pilot", currentAge;
 
-        async function startApp() {
+        async function handleLogin(res) {
+            const token = JSON.parse(window.atob(res.credential.split('.')[1]));
+            currentName = token.name;
             currentAge = document.getElementById('age').value;
-            if(!currentAge) return alert("Enter Age!");
             
+            if(!currentAge) return alert("Enter Age first!");
+            
+            console.log("Attempting to connect...");
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('chat-screen').style.display = 'flex';
 
+            // Load data
             const { data } = await supabase.from('messages').select('*').eq('age', currentAge);
             if(data) data.forEach(display);
 
+            // Socket connection with error logging
             socket = new WebSocket('wss://render-husi.onrender.com');
+            socket.onopen = () => console.log("WebSocket Connected");
             socket.onmessage = (e) => display(JSON.parse(e.data));
+            socket.onerror = (e) => console.error("Socket Error: ", e);
         }
 
         function display(data) {
@@ -75,11 +76,6 @@
             await supabase.from('messages').insert([payload]);
             socket.send(JSON.stringify({ type: 'chat', ...payload }));
             document.getElementById('msg').value = '';
-        }
-
-        function updateName() {
-            currentName = document.getElementById('newName').value;
-            alert("Name updated to " + currentName);
         }
     </script>
 </body>
