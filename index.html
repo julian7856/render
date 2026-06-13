@@ -26,11 +26,10 @@
     </div>
 
     <script>
-        // Declare supabase only once
-        const supabase = supabase.createClient('https://qgrfomaigbfbeetafexl.supabase.co', 'sb_publishable_x7lqzAgNEH2YSohhpru3RQ_0TzyUwue');
+        // Updated Supabase URL and initialized correctly
+        const supabase = supabase.createClient('https://bysvktyehbdkohjvmzmr.supabase.co', 'sb_publishable_x7lqzAgNEH2YSohhpru3RQ_0TzyUwue');
         let socket, currentName, currentAge;
 
-        // Ensure this function is available in the global scope
         window.handleLogin = async function(res) {
             try {
                 const token = JSON.parse(window.atob(res.credential.split('.')[1]));
@@ -56,6 +55,7 @@
 
         async function send() {
             const text = document.getElementById('msg').value;
+            // Using the new URL via the supabase client instance
             await supabase.from('messages').insert([{ sender: currentName, text, age: currentAge }]);
             socket.send(JSON.stringify({ type: 'chat', sender: currentName, text, age: currentAge }));
             document.getElementById('msg').value = '';
