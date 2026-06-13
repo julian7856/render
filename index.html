@@ -6,32 +6,36 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { margin: 0; font-family: sans-serif; background: #2f3136; color: white; height: 100vh; display: flex; }
+        
+        /* Sidebar: Hidden on mobile */
         #sidebar { width: 250px; background: #202225; padding: 20px; border-right: 1px solid #000; }
-        #chat-container { flex: 1; display: flex; flex-direction: column; }
         @media (max-width: 600px) { #sidebar { display: none; } }
+        
+        #chat-container { flex: 1; display: flex; flex-direction: column; }
+        #messages { flex: 1; padding: 20px; overflow-y: auto; }
         .msg { background: #40444b; padding: 10px; margin-bottom: 5px; border-radius: 5px; }
-        input { padding: 10px; border: none; border-radius: 4px; width: 90%; margin-bottom: 10px; }
+        input { padding: 10px; border: none; border-radius: 4px; }
     </style>
 </head>
 <body>
 
     <div id="login-screen" style="margin: auto; text-align: center;">
-        <h2>Pilot Platform Login</h2>
+        <h2>Pilot Platform</h2>
         <div id="g_id_onload" data-client_id="205585516210-sk72oka4jppvr4micfes5m9dkvd27f1o.apps.googleusercontent.com" data-callback="handleLogin"></div>
         <div class="g_id_signin"></div>
-        <input type="number" id="age" placeholder="Enter Age">
+        <input type="number" id="age" placeholder="Enter Age" style="width: 200px; margin-top: 10px;">
     </div>
 
     <div id="chat-screen" style="display:none; width: 100%;">
         <div id="sidebar">
             <h3>Settings</h3>
-            <input type="text" id="newName" placeholder="New Name">
-            <button onclick="updateName()">Save Name</button>
+            <input type="text" id="newName" placeholder="New Display Name"><br>
+            <button onclick="updateName()" style="margin-top: 10px;">Update Name</button>
         </div>
         <div id="chat-container">
             <div id="messages"></div>
             <div style="padding: 10px; display: flex; gap: 5px;">
-                <input type="text" id="msg" style="flex:1;" placeholder="Message...">
+                <input type="text" id="msg" style="flex:1;" placeholder="Type a message...">
                 <button onclick="send()">Send</button>
             </div>
         </div>
@@ -48,19 +52,20 @@
             
             if(!currentAge) return alert("Enter Age first!");
             
-            console.log("Attempting to connect...");
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('chat-screen').style.display = 'flex';
+            // Kill the login UI
+            document.getElementById('login-screen').remove();
+            
+            // Show the chat screen
+            const chatScreen = document.getElementById('chat-screen');
+            chatScreen.style.display = 'flex';
 
-            // Load data
+            // Connect
+            socket = new WebSocket('wss://render-husi.onrender.com');
+            socket.onmessage = (e) => display(JSON.parse(e.data));
+            
+            // Load history
             const { data } = await supabase.from('messages').select('*').eq('age', currentAge);
             if(data) data.forEach(display);
-
-            // Socket connection with error logging
-            socket = new WebSocket('wss://render-husi.onrender.com');
-            socket.onopen = () => console.log("WebSocket Connected");
-            socket.onmessage = (e) => display(JSON.parse(e.data));
-            socket.onerror = (e) => console.error("Socket Error: ", e);
         }
 
         function display(data) {
@@ -68,6 +73,7 @@
             div.className = 'msg';
             div.innerText = `${data.sender || 'User'}: ${data.text || ''}`;
             document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
         }
 
         async function send() {
