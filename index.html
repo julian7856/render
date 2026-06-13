@@ -2,61 +2,109 @@
 <html lang="en">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { margin: 0; font-family: sans-serif; background: #36393f; color: white; height: 100vh; display: flex; flex-direction: column; }
-        #login-screen { padding: 50px; text-align: center; }
-        #chat-screen { display: none; height: 100vh; flex-direction: column; }
-        #messages { flex: 1; overflow-y: auto; padding: 10px; }
-        .msg { background: #40444b; padding: 10px; margin-bottom: 5px; border-radius: 5px; }
-        input, button { padding: 10px; border-radius: 5px; border: none; margin: 5px; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #36393f; color: #dcddde; height: 100vh; display: flex; }
+        
+        /* Mobile-first layout */
+        #sidebar { width: 240px; background: #2f3136; padding: 15px; border-right: 1px solid #202225; }
+        #chat-main { flex: 1; display: flex; flex-direction: column; height: 100vh; }
+        
+        /* Hides sidebar on small screens */
+        @media (max-width: 600px) { #sidebar { display: none; } }
+        
+        #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .msg-bubble { background: #40444b; padding: 10px; border-radius: 8px; max-width: 85%; width: fit-content; }
+        #input-area { padding: 20px; display: flex; gap: 10px; background: #2f3136; }
+        
+        input { flex: 1; padding: 10px; background: #40444b; border: none; color: white; border-radius: 4px; }
+        button { background: #5865f2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
-
-    <div id="login-screen">
-        <h2>Pilot Platform</h2>
-        <input type="text" id="name" placeholder="Enter Your Name"><br>
-        <input type="number" id="age" placeholder="Enter Age"><br>
-        <button onclick="enterChat()">Enter Chat</button>
+    <div id="login-screen" style="margin: auto; text-align: center;">
+        <h2>Pilot Platform Login</h2>
+        <div id="g_id_onload" data-client_id="205585516210-sk72oka4jppvr4micfes5m9dkvd27f1o.apps.googleusercontent.com" data-callback="handleLogin"></div>
+        <div class="g_id_signin"></div>
+        <input type="number" id="age" placeholder="Enter Age" style="margin-top:10px; width: 100%; box-sizing: border-box;">
     </div>
 
-    <div id="chat-screen">
-        <div id="messages"></div>
-        <div style="padding: 10px;">
-            <input type="text" id="msg" style="width: 70%;" placeholder="Message...">
-            <button onclick="send()">Send</button>
+    <div id="chat-screen" style="display:none; width: 100%; flex-direction: row;">
+        <div id="sidebar">
+            <h3>Channels</h3># general-chat
+            <div style="margin-top: 20px;">
+                <input type="text" id="newName" placeholder="New Display Name">
+                <button onclick="changeName()" style="width:100%; margin-top:5px;">Change Name</button>
+            </div>
+        </div>
+        <div id="chat-main">
+            <div id="messages"></div>
+            <div id="input-area">
+                <input type="text" id="msg" placeholder="Message...">
+                <input type="file" id="fileInput" hidden>
+                <button onclick="document.getElementById('fileInput').click()">+</button>
+                <button onclick="send()">Send</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const supabase = supabase.createClient('https://bysvktyehbdkohjvmzmr.supabase.co', 'sb_publishable_x7lqzAgNEH2YSohhpru3RQ_0TzyUwue');
+        // Supabase client instance
+        const supabase = supabase.createClient('https://qgrfomaigbfbeetafexl.supabase.co', 'sb_publishable_x7lqzAgNEH2YSohhpru3RQ_0TzyUwue');
         let socket, currentName, currentAge;
 
-        function enterChat() {
-            currentName = document.getElementById('name').value;
+        window.handleLogin = async function(res) {
+            const token = JSON.parse(window.atob(res.credential.split('.')[1]));
+            currentName = token.name;
             currentAge = document.getElementById('age').value;
-            
-            if(!currentName || !currentAge) return alert("Please enter name and age!");
+            if(!currentAge) return alert("Enter Age first!");
             
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('chat-screen').style.display = 'flex';
-
+            
             socket = new WebSocket('wss://render-husi.onrender.com');
-            socket.onmessage = (e) => {
-                const data = JSON.parse(e.data);
-                const div = document.createElement('div');
-                div.className = 'msg';
-                div.innerText = (data.sender || "User") + ": " + (data.text || "");
-                document.getElementById('messages').appendChild(div);
-            };
+            
+            const { data: history } = await supabase.from('messages')
+                .select('*').eq('age', currentAge).order('created_at', { ascending: true });
+            if(history) history.forEach(displayMessage);
+
+            socket.onopen = () => socket.send(JSON.stringify({ type: 'join', name: currentName, age: currentAge }));
+            socket.onmessage = (e) => displayMessage(JSON.parse(e.data));
+        }
+
+        function displayMessage(data) {
+            const div = document.createElement('div');
+            div.className = 'msg-bubble';
+            div.innerHTML = `<b>${data.sender || data.from || 'User'}:</b> ${data.text || ''}`;
+            if (data.img) div.innerHTML += `<br><img src="${data.img}" style="max-width:200px;">`;
+            document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
         }
 
         async function send() {
+            const file = document.getElementById('fileInput').files[0];
             const text = document.getElementById('msg').value;
-            await supabase.from('messages').insert([{ sender: currentName, text, age: currentAge }]);
-            socket.send(JSON.stringify({ type: 'chat', sender: currentName, text, age: currentAge }));
+            const payload = { sender: currentName, text, age: currentAge };
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    payload.img = e.target.result;
+                    await supabase.from('messages').insert([payload]);
+                    socket.send(JSON.stringify({ type: 'chat', ...payload }));
+                };
+                reader.readAsDataURL(file);
+            } else {
+                await supabase.from('messages').insert([payload]);
+                socket.send(JSON.stringify({ type: 'chat', ...payload }));
+            }
             document.getElementById('msg').value = '';
+        }
+
+        function changeName() {
+            currentName = document.getElementById('newName').value;
+            socket.send(JSON.stringify({ type: 'update-name', newName: currentName }));
         }
     </script>
 </body>
